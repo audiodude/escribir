@@ -140,16 +140,16 @@ Landed on **escribir** — the Spanish word for "to write" — because the
 **Esc** key is exactly the mechanism that brings the chrome back
 (`Escape → showChrome()`), and "escribir" begins with those same three
 letters. Stylized as **ESCribir** (capitalizing the pun) for the
-user-facing name — window title, app title — while the underlying
-identifiers (package name, Cargo crate/lib name, bundle identifier,
-directory name) stay lowercase `escribir`, since macOS bundle identifiers
-and package names don't handle mixed case cleanly.
+user-facing name — window title, app/bundle name (`ESCribir.app`) — while
+the underlying identifiers that npm/cargo/Apple expect lowercase (package
+name, Cargo crate/lib name, bundle identifier, directory name) stay
+`escribir`.
 
 Everything referencing the old name was updated: `package.json` name,
 `src-tauri/Cargo.toml` package + lib name, `src-tauri/src/main.rs`'s
-`escribir_lib::run()` call, `tauri.conf.json` (`productName`, `identifier`
-→ `com.tmoney.escribir`, window title → "ESCribir"), `index.html` `<title>`,
-and the project directory itself
+`escribir_lib::run()` call, `tauri.conf.json` (`productName` → "ESCribir",
+`identifier` → `com.tmoney.escribir`, window title → "ESCribir"),
+`index.html` `<title>`, and the project directory itself
 (`~/code/vibes/writenow` → `~/code/vibes/escribir`).
 
 ## Release (v1.0.0)
@@ -161,8 +161,43 @@ and the project directory itself
   scaffolding.
 - `src-tauri/target` was excluded from git (build artifacts, not source).
 - Production build via `pnpm exec tauri build` produces:
-  - `src-tauri/target/release/bundle/macos/escribir.app`
-  - `src-tauri/target/release/bundle/dmg/escribir_1.0.0_aarch64.dmg`
+  - `src-tauri/target/release/bundle/macos/ESCribir.app`
+  - `src-tauri/target/release/bundle/dmg/ESCribir_1.0.0_aarch64.dmg`
+
+## Logo
+
+Generated via [fal.ai](https://fal.ai), iterated in four rounds:
+
+1. Four pictorial concepts (Esc key, cursor, quill, page-corner) via
+   `flux/schnell` — rejected outright ("these are all absolutely terrible").
+   In hindsight the wrong approach twice over: the escribir/ESC pun is a
+   letter-level wordplay that no pictogram can carry, and `flux/schnell` is
+   a photo-oriented raster model that defaults to glossy skeuomorphic
+   app-icon renders (plus a stock feather-quill cliché) rather than
+   anything distinctive.
+2. Switched to `recraft-v3` (`vector_illustration` style — actually trained
+   for icon/vector work, and returns real SVG rather than raster) with a
+   concrete reference image supplied by the user: a fountain pen writing
+   "ESC" onto a keycap. This landed the concept immediately, in both an
+   amber-background variant (matching the reference) and a dark
+   charcoal/gold variant (matching the app's own theme) — but the keycap
+   geometry read as "a pillow," and a busier multi-key variant didn't read
+   as a keyboard at all.
+3. Reprompted for an explicitly sharp trapezoidal single-keycap shape
+   ("NOT rounded, NOT soft, NOT pillow-shaped") — fixed the geometry across
+   the board.
+4. Final pass rebalanced composition: the pen was too small relative to
+   the keycap, so the prompt was adjusted to make the pen dominate the
+   frame diagonally while keeping its nib in contact with the keycap top
+   (losing that contact was the main failure mode of this round — two of
+   four attempts drifted the pen away from the key entirely).
+
+Final pick: **`04_darkbigpen_4`** — large pen, dark/gold theme match, and
+"ESC" rendered as if embossed into the keycap face rather than just printed
+on it. Saved as `assets/logo.svg` (source of truth) with all platform icon
+sizes regenerated from it via `pnpm exec tauri icon assets/logo.svg`
+(mobile/Android/iOS variants the generator also produces were deleted —
+this is a macOS-only desktop app).
 
 ## Deliberate non-goals
 

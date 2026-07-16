@@ -1,7 +1,14 @@
+<img src="assets/logo.svg" alt="ESCribir logo" width="96" />
+
 # ESCribir
 
 A distraction-free desktop markdown writing app. Toggle between a CodeMirror
 source view and a ProseMirror WYSIWYG view of the same markdown document.
+
+The app icon is a pen writing "ESC" onto a keycap — a nod to the app's own
+name (Spanish *escribir*, "to write") and to the Escape key restoring the
+UI chrome while writing. Source vector at `assets/logo.svg`; platform icon
+files under `src-tauri/icons/` are generated from it via `tauri icon`.
 
 ## Features
 
