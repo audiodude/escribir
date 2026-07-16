@@ -163,6 +163,35 @@ Everything referencing the old name was updated: `package.json` name,
 - Production build via `pnpm exec tauri build` produces:
   - `src-tauri/target/release/bundle/macos/ESCribir.app`
   - `src-tauri/target/release/bundle/dmg/ESCribir_1.0.0_aarch64.dmg`
+- Pushed to GitHub (`audiodude/escribir`, public) and released as `v1.0.0`
+  with the dmg attached.
+
+### Codesigning and notarization
+
+The first uploaded build was unsigned, so anyone downloading it via a
+browser got Gatekeeper's "is damaged and can't be opened" dialog — quarantine
+flag on an unsigned app, not actual corruption. Fixed once a paid Apple
+Developer account was available:
+
+- A **Developer ID Application** certificate (distinct from the free
+  "Apple Development" cert Xcode sets up automatically — that one can't
+  sign for distribution outside the App Store) was created via Xcode →
+  Settings → Accounts → Manage Certificates, and lands in the login
+  keychain.
+- `src-tauri/tauri.conf.json` → `bundle.macOS.signingIdentity` set to the
+  resulting identity string (`security find-identity -v -p codesigning`
+  to find it).
+- Notarization credentials (`APPLE_ID`, `APPLE_PASSWORD` — an
+  app-specific password from appleid.apple.com, not the account
+  password — and `APPLE_TEAM_ID`) live in `~/.secrets`, never in the repo.
+  `tauri build` picks them up from the environment automatically and
+  signs, notarizes, and staples the ticket to the `.app` in one pass.
+- Verified via `codesign --verify --deep --strict`, `spctl -a -vv`
+  (should report `source=Notarized Developer ID`), and
+  `xcrun stapler validate` (confirms the ticket is stapled, so Gatekeeper
+  checks work offline too).
+- The signed dmg replaced the original unsigned one on the `v1.0.0`
+  GitHub release (`gh release upload --clobber`).
 
 ## Logo
 
