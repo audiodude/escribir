@@ -5,6 +5,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 const AUTOSAVE_DELAY = 1000;
 const SAVED_FLASH_DURATION = 1500;
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md'] }];
+const LAST_FILE_KEY = 'escribir:lastFile';
 
 const state = reactive({
   documentOpen: false,
@@ -49,6 +50,7 @@ function resetDocument(path, content) {
 async function loadFile(path) {
   try {
     const text = await invoke('read_file', { path });
+    invoke('delete_draft').catch(() => {});
     resetDocument(path, text);
   } catch (e) {
     state.errorMessage = String(e);
@@ -68,18 +70,40 @@ async function selectSibling(path) {
 }
 
 function newFile() {
+  invoke('delete_draft').catch(() => {});
   resetDocument(null, '');
 }
 
+async function restoreLastFile() {
+  const path = localStorage.getItem(LAST_FILE_KEY);
+  if (path) {
+    try {
+      const text = await invoke('read_file', { path });
+      resetDocument(path, text);
+      return;
+    } catch {
+      localStorage.removeItem(LAST_FILE_KEY);
+    }
+  }
+  try {
+    const draft = await invoke('read_draft');
+    if (draft) resetDocument(null, draft);
+  } catch {}
+}
+
 async function writeCurrent() {
-  if (!state.documentOpen || !state.currentFile) return;
+  if (!state.documentOpen) return;
   if (state.content === lastSavedContent) {
     state.isDirty = false;
     return;
   }
   state.saveStatus = 'saving';
   try {
-    await invoke('write_file', { path: state.currentFile, contents: state.content });
+    if (state.currentFile) {
+      await invoke('write_file', { path: state.currentFile, contents: state.content });
+    } else {
+      await invoke('write_draft', { contents: state.content });
+    }
     lastSavedContent = state.content;
     state.isDirty = false;
     if (state.saveStatus === 'saving') state.saveStatus = 'idle';
@@ -119,13 +143,37 @@ async function saveNow() {
     isNewPath = true;
   }
   await writeCurrent();
-  if (isNewPath) refreshSiblings();
+  if (isNewPath) {
+    await invoke('delete_draft').catch(() => {});
+    refreshSiblings();
+  }
   if (state.saveStatus !== 'error') flashSaved();
+}
+
+async function flushSave() {
+  if (!state.documentOpen) return true;
+  if (autosaveTimer) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+  await writeCurrent();
+  return state.saveStatus !== 'error';
 }
 
 function showChrome() {
   state.chromeHidden = false;
 }
+
+watch(
+  () => state.currentFile,
+  (path) => {
+    if (path) {
+      localStorage.setItem(LAST_FILE_KEY, path);
+    } else {
+      localStorage.removeItem(LAST_FILE_KEY);
+    }
+  }
+);
 
 watch(
   () => state.content,
@@ -134,7 +182,7 @@ watch(
     state.isDirty = state.content !== lastSavedContent;
     if (state.isDirty) {
       state.chromeHidden = true;
-      if (state.currentFile) scheduleAutosave();
+      scheduleAutosave();
     }
   }
 );
@@ -145,6 +193,8 @@ export function useDocument() {
     openFile,
     newFile,
     saveNow,
+    flushSave,
+    restoreLastFile,
     showChrome,
     selectSibling,
   };

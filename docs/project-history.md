@@ -228,6 +228,99 @@ sizes regenerated from it via `pnpm exec tauri icon assets/logo.svg`
 (mobile/Android/iOS variants the generator also produces were deleted —
 this is a macOS-only desktop app).
 
+## Post-1.0.0: session restore, save-on-close, Tab handling
+
+Four behavior changes requested as a follow-up batch:
+
+- **Reopen last document on launch.** The current file's path is mirrored
+  to `localStorage` (`escribir:lastFile`) via a watcher on
+  `state.currentFile`; on mount, `restoreLastFile()` re-reads that path and
+  opens it, silently dropping the key if the file no longer exists.
+  `localStorage` rather than a plugin/store file — a single string doesn't
+  justify re-adding `tauri-plugin-store` (removed earlier with the folder
+  model). The empty Open/New state still exists but is now only seen on
+  first run or after Cmd+N; its redesign is deferred per the user ("we'll
+  talk about the zero state later").
+- **Window size/position persistence** via the official
+  `tauri-plugin-window-state` (Rust-side, restores on window creation and
+  saves on close) plus the `window-state:default` capability. No JS involved.
+- **Save on close/exit, and the untitled draft buffer.** An untitled
+  document is autosaved to a draft file (`untitled-draft.md` in the app
+  data dir) via the same 1s-debounced autosave path as real files — the
+  user asked for this explicitly over a save-on-close dialog ("writers are
+  paranoid about saving their work", and a dialog on quit is friction).
+  Draft lifecycle: written by autosave whenever the buffer is untitled and
+  dirty; deleted when it becomes irrelevant — `newFile()`, a successful
+  `loadFile()`, or naming the buffer via Cmd+S/clicking "Untitled" (which
+  saves to a real path, then deletes the draft). Startup order:
+  `localStorage` last-file path wins; otherwise a non-empty draft is
+  restored as the untitled buffer. Because everything is already on disk,
+  close/quit never prompts: JS intercepts `onCloseRequested` and awaits
+  `flushSave()` (clears any pending autosave timer, writes immediately). On
+  success the handler returns without `preventDefault()`, and the Tauri JS
+  wrapper itself calls `window.destroy()` — so closing needs the
+  `core:window:allow-destroy` capability (the first attempt instead
+  re-called `close()` behind a re-entrancy flag, which dead-ended exactly
+  here: the wrapper's `destroy()` was permission-denied and the red close
+  button silently did nothing). On write error, `preventDefault()` keeps
+  the window open so the error stays visible. Cmd+Q never reaches JS window
+  events, so Rust intercepts `RunEvent::ExitRequested`, calls
+  `prevent_exit()`, and emits a `flush-before-exit` event; the JS listener
+  flushes, then invokes a `finish_exit` command that sets an `AtomicBool`
+  and calls `app.exit(0)` (the flag lets the second `ExitRequested`
+  through). Guard: if no windows remain (e.g. exit triggered by the last
+  window's destroy), exit proceeds without emitting to a dead webview —
+  otherwise the prevented exit would leave a windowless zombie process.
+  `tauri-plugin-window-state` is compatible with `destroy()`: it tracks
+  geometry continuously on Moved/Resized and writes its state file on
+  `RunEvent::Exit`.
+- **Tab / Shift-Tab no longer steal focus.** Neither CodeMirror's
+  `basicSetup` nor ProseMirror's `exampleSetup` binds Tab, so the browser
+  default (focus the next element) won. Source mode now adds CodeMirror's
+  `indentWithTab` at `Prec.highest`; WYSIWYG adds a keymap where Tab sinks
+  and Shift-Tab lifts list items (`prosemirror-schema-list`), falling back
+  to a swallowed no-op (`|| true`) outside lists so focus stays in the
+  editor. `@codemirror/commands` and `prosemirror-schema-list` were added
+  as direct dependencies (previously only transitive — undeclared imports
+  are unreliable under pnpm's strict node_modules).
+
+Also clarified by the user in the same batch: autosave must never trigger
+a save dialog (it already couldn't — it only schedules when a path
+exists), and clicking the "Untitled" filename should immediately pop the
+save dialog, so that control is now a button wired to `saveNow()`.
+
+## Automated tests (post-1.0.0 follow-up)
+
+Everything added in the session above is covered except the parts that
+can't be automated on macOS:
+
+- **Frontend — Vitest + jsdom** (`npm test`, 35 tests): the full
+  `useDocument` behavior matrix (autosave debounce to file vs draft,
+  saveNow dialog flow, flushSave, startup restore order, draft deletion on
+  new/open/save-as), the Toolbar (sibling dropdown, clickable Untitled,
+  mode toggle, status text), App-level chrome behavior (the `(saved)` flash
+  gating, close/quit flush wiring via mocked `onCloseRequested` /
+  `listen`), and the ProseMirror Tab keymap (sink/lift/swallow) exercised
+  directly through `plugin.props.handleKeyDown` with a fake view — no DOM
+  editor needed. Two gotchas surfaced: the composable is a module-level
+  singleton with an unexported `lastSavedContent`, so suites must
+  `vi.resetModules()` + re-import per test; and `vi.resetModules()` does
+  NOT recreate `vi.mock` instances, so `vi.clearAllMocks()` is still
+  required or call history leaks between tests (a real failure this hit).
+  The Tab keymap was extracted from `WysiwygEditor.vue` to
+  `src/prosemirror/tabKeymap.js` to make it importable. CodeMirror's
+  `indentWithTab` is untested beyond wiring — it's library behavior.
+- **Rust — `cargo test`** (6 tests): the draft read/write/delete helpers
+  and `list_markdown_siblings` against `tempfile` dirs (commands were
+  refactored to thin `AppHandle` wrappers over pure `&Path` functions), a
+  read/write roundtrip, and `should_flush_before_exit` — the predicate
+  extracted from the `ExitRequested` handler, guarding the
+  windowless-zombie regression.
+- **Not automated**: window-geometry persistence (the plugin's own tested
+  behavior) and true end-to-end of the red close button / Cmd+Q roundtrip —
+  Tauri's WebDriver has no WKWebView driver on macOS. Those stay manual
+  smoke-test items.
+
 ## Deliberate non-goals
 
 Called out explicitly during brainstorming so they don't get "fixed" later

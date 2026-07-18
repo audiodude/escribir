@@ -4,6 +4,7 @@ import { EditorView } from 'prosemirror-view';
 import { EditorState } from 'prosemirror-state';
 import { exampleSetup } from 'prosemirror-example-setup';
 import { defaultMarkdownParser, defaultMarkdownSerializer, schema } from 'prosemirror-markdown';
+import { listTabKeymap } from '../prosemirror/tabKeymap.js';
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -17,7 +18,7 @@ let lastKnownMarkdown = '';
 function createState(markdownText) {
   return EditorState.create({
     doc: defaultMarkdownParser.parse(markdownText || ''),
-    plugins: exampleSetup({ schema, menuBar: false }),
+    plugins: [listTabKeymap(schema), ...exampleSetup({ schema, menuBar: false })],
   });
 }
 

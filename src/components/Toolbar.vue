@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { useDocument } from '../composables/useDocument.js';
 
-const { state, openFile, newFile, selectSibling } = useDocument();
+const { state, openFile, newFile, saveNow, selectSibling } = useDocument();
 
 function basename(path) {
   return path.split('/').pop();
@@ -38,7 +38,9 @@ function toggleMode() {
         {{ basename(path) }}
       </option>
     </select>
-    <span v-else class="filename-select untitled">{{ filename }}</span>
+    <button v-else class="filename-select untitled" title="Click to name and save" @click="saveNow">
+      {{ filename }}
+    </button>
     <button class="action-btn" @click="openFile">Open other…</button>
     <button class="action-btn" @click="newFile">New</button>
     <span class="status" :class="state.saveStatus">{{ statusText }}</span>
@@ -86,7 +88,6 @@ function toggleMode() {
 }
 
 .filename-select.untitled {
-  cursor: default;
   color: #808890;
 }
 

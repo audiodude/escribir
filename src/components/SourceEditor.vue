@@ -1,7 +1,8 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, shallowRef } from 'vue';
-import { EditorView } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, Prec } from '@codemirror/state';
+import { indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
@@ -43,6 +44,7 @@ onMounted(() => {
       extensions: [
         basicSetup,
         markdown(),
+        Prec.highest(keymap.of([indentWithTab])),
         Prec.highest(syntaxHighlighting(markdownHighlight)),
         updateListener,
         EditorView.lineWrapping,
