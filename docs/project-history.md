@@ -321,6 +321,14 @@ can't be automated on macOS:
   Tauri's WebDriver has no WKWebView driver on macOS. Those stay manual
   smoke-test items.
 
+## Release (v1.1.0)
+
+Version bumped to `1.1.0` in `package.json`, `src-tauri/Cargo.toml`, and
+`src-tauri/tauri.conf.json`; signed + notarized build via
+`pnpm exec tauri build` (notarization accepted, ticket stapled, verified
+with `spctl`/`stapler validate`); released on GitHub as draft `v1.1.0`
+with `ESCribir_1.1.0_aarch64.dmg` attached, matching the v1.0.0 pattern.
+
 ## Deliberate non-goals
 
 Called out explicitly during brainstorming so they don't get "fixed" later
