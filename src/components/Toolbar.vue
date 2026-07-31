@@ -10,8 +10,12 @@ function basename(path) {
 
 const filename = computed(() => (state.currentFile ? basename(state.currentFile) : 'Untitled'));
 
-function onFilenameChange(e) {
-  selectSibling(e.target.value);
+async function onFilenameChange(e) {
+  const select = e.target;
+  await selectSibling(select.value);
+  // A cancelled switch leaves the document untouched, so currentFile never
+  // changes and Vue has no reason to re-render the select. Put it back by hand.
+  select.value = state.currentFile;
 }
 
 const statusText = computed(() => {

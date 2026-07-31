@@ -6,6 +6,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useDocument } from './composables/useDocument.js';
 import Toolbar from './components/Toolbar.vue';
 import EditorPane from './components/EditorPane.vue';
+import UnsavedChangesDialog from './components/UnsavedChangesDialog.vue';
 
 const { state, saveNow, openFile, newFile, showChrome, restoreLastFile, flushSave } =
   useDocument();
@@ -30,6 +31,9 @@ onMounted(async () => {
 });
 
 function handleKeydown(e) {
+  // The unsaved-work prompt is modal: it owns the keyboard until it is answered
+  // (it handles Escape itself), so nothing here can bypass it and drop the work.
+  if (state.unsavedPrompt) return;
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === 's') {
     e.preventDefault();
@@ -57,6 +61,7 @@ onBeforeUnmount(() => {
     <div v-if="state.chromeHidden && state.saveStatus === 'saved'" class="saved-flash">
       (saved)
     </div>
+    <UnsavedChangesDialog />
   </div>
 </template>
 

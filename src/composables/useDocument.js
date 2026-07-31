@@ -18,10 +18,12 @@ const state = reactive({
   saveStatus: 'idle', // 'idle' | 'saving' | 'saved' | 'error'
   errorMessage: '',
   siblingFiles: [], // .md files in the current file's directory, for the filename dropdown
+  unsavedPrompt: null, // null, or the action waiting on the dialog: 'new' | 'open'
 });
 
 let autosaveTimer = null;
 let lastSavedContent = '';
+let unsavedPromptResolve = null;
 
 async function refreshSiblings() {
   if (!state.currentFile) {
@@ -48,6 +50,7 @@ function resetDocument(path, content) {
 }
 
 async function loadFile(path) {
+  if (!(await confirmReplaceBuffer('open'))) return;
   try {
     const text = await invoke('read_file', { path });
     invoke('delete_draft').catch(() => {});
@@ -69,7 +72,49 @@ async function selectSibling(path) {
   await loadFile(path);
 }
 
-function newFile() {
+// Whether replacing the buffer would lose text that has nowhere else to live.
+// An untitled buffer counts even when it is not dirty: its only copy is the
+// draft file, which starting a new document deletes.
+function hasUnsavedWork() {
+  if (!state.documentOpen) return false;
+  if (!state.currentFile) return state.content.trim() !== '';
+  return state.isDirty;
+}
+
+function askUnsavedWork(action) {
+  state.unsavedPrompt = action;
+  return new Promise((resolve) => {
+    unsavedPromptResolve = resolve;
+  });
+}
+
+// Called by the dialog with 'save' | 'discard' | 'cancel'.
+function resolveUnsavedPrompt(choice) {
+  state.unsavedPrompt = null;
+  const resolve = unsavedPromptResolve;
+  unsavedPromptResolve = null;
+  resolve?.(choice);
+}
+
+// The single gate in front of every path that replaces the buffer. `action`
+// ('new' | 'open') is what the dialog names as the thing about to happen.
+// Returns false when the user backed out and the current document must stay put.
+async function confirmReplaceBuffer(action) {
+  if (state.unsavedPrompt) return false; // a prompt is already waiting on the user
+  if (!hasUnsavedWork()) return true;
+  const choice = await askUnsavedWork(action);
+  if (choice === 'cancel') return false;
+  if (choice === 'save') {
+    await saveNow();
+    // The save-as dialog may have been cancelled, or the write may have failed.
+    // Either way the work is still only in the buffer, so keep it there.
+    if (state.saveStatus === 'error' || hasUnsavedWork()) return false;
+  }
+  return true;
+}
+
+async function newFile() {
+  if (!(await confirmReplaceBuffer('new'))) return;
   invoke('delete_draft').catch(() => {});
   resetDocument(null, '');
 }
@@ -197,5 +242,6 @@ export function useDocument() {
     restoreLastFile,
     showChrome,
     selectSibling,
+    resolveUnsavedPrompt,
   };
 }

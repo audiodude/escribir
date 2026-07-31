@@ -8,7 +8,7 @@ import { useDocument } from '../composables/useDocument.js';
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
 vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn(), save: vi.fn() }));
 
-const { state } = useDocument();
+const { state, resolveUnsavedPrompt } = useDocument();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,6 +24,7 @@ beforeEach(() => {
     saveStatus: 'idle',
     errorMessage: '',
     siblingFiles: [],
+    unsavedPrompt: null,
   });
   invoke.mockImplementation((cmd) => {
     if (cmd === 'read_file') return Promise.resolve('# file');
@@ -54,6 +55,24 @@ describe('filename control', () => {
     expect(invoke).toHaveBeenCalledWith('read_file', { path: '/a/c.md' });
     expect(state.currentFile).toBe('/a/c.md');
     expect(state.content).toBe('# file');
+  });
+
+  it('snaps back to the open file when the switch is cancelled', async () => {
+    state.currentFile = '/a/b.md';
+    state.siblingFiles = ['/a/b.md', '/a/c.md'];
+    state.content = 'unsaved edits';
+    state.isDirty = true;
+    const wrapper = mount(Toolbar);
+
+    await wrapper.find('select').setValue('/a/c.md');
+    await flushPromises();
+    expect(state.unsavedPrompt).toBe('open');
+
+    resolveUnsavedPrompt('cancel');
+    await flushPromises();
+
+    expect(state.currentFile).toBe('/a/b.md');
+    expect(wrapper.find('select').element.value).toBe('/a/b.md');
   });
 
   it('shows a clickable Untitled that pops the save dialog', async () => {

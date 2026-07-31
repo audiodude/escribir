@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 
 const h = vi.hoisted(() => ({ closeHandlers: [], exitListeners: [] }));
@@ -21,10 +21,20 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 let invoke, App, state;
+let mounted = [];
 
+// App registers a window keydown listener, so wrappers must be torn down between
+// tests or stale listeners keep firing against earlier module instances.
 function mountApp() {
-  return mount(App, { global: { stubs: { Toolbar: true, EditorPane: true } } });
+  const wrapper = mount(App, { global: { stubs: { Toolbar: true, EditorPane: true } } });
+  mounted.push(wrapper);
+  return wrapper;
 }
+
+afterEach(() => {
+  mounted.forEach((w) => w.unmount());
+  mounted = [];
+});
 
 beforeEach(async () => {
   vi.resetModules();
@@ -55,6 +65,23 @@ describe('(saved) flash', () => {
     state.saveStatus = 'idle';
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.saved-flash').exists()).toBe(false);
+  });
+});
+
+describe('unsaved-work prompt', () => {
+  it('ignores app shortcuts while the prompt is up, so Cmd+O cannot bypass it', async () => {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    mountApp();
+    await flushPromises();
+    state.documentOpen = true;
+    state.content = 'work in progress';
+    state.unsavedPrompt = 'new';
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'o', metaKey: true }));
+    await flushPromises();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(state.content).toBe('work in progress');
   });
 });
 

@@ -329,6 +329,71 @@ Version bumped to `1.1.0` in `package.json`, `src-tauri/Cargo.toml`, and
 with `spctl`/`stapler validate`); released on GitHub as draft `v1.1.0`
 with `ESCribir_1.1.0_aarch64.dmg` attached, matching the v1.0.0 pattern.
 
+## Post-1.1.0: New/Open no longer destroy unsaved work
+
+A bug report: in the untitled draft buffer, clicking **New** destroyed your
+work outright. `newFile()` did `delete_draft` + `resetDocument(null, '')`
+unconditionally — killing both copies (the on-disk autosaved draft and the
+in-memory buffer), and bumping `docId` re-keyed the editor component, so
+the undo history went with them. No confirmation, no recovery.
+
+The subtle part: **`isDirty` is the wrong guard.** Once the 1s autosave
+lands, an untitled buffer is `isDirty === false` — yet its only copy is the
+draft file that `newFile()` then deletes. The real condition is "does this
+text have anywhere to live?":
+
+```js
+function hasUnsavedWork() {
+  if (!state.documentOpen) return false;
+  if (!state.currentFile) return state.content.trim() !== ''; // draft is the only copy
+  return state.isDirty;
+}
+```
+
+`loadFile()` had the identical hole — opening another file or picking one
+from the sibling dropdown ran the same `delete_draft` + `resetDocument`.
+Rather than duplicating the check, everything funnels through one gate,
+`confirmReplaceBuffer(action)`, called by both `newFile()` and `loadFile()`;
+`restoreLastFile()` deliberately bypasses it (it inlines its own read, and
+there is nothing to protect at startup).
+
+Choices worth recording:
+
+- **Save… / Don't Save / Cancel**, not a bare confirm. "Save" routes through
+  the existing `saveNow()` — the save-as dialog for an untitled buffer,
+  in-place for a titled file. If the save-as is cancelled or the write
+  fails, the new document is aborted and the text stays put.
+- Tauri's dialog plugin only does two buttons (`ask`/`confirm`), so the
+  three-way prompt is an in-app Vue component rather than a native alert.
+  It also keeps the dark chrome consistent and stays testable in jsdom.
+- **Escape maps to Cancel, never Discard** — a stray keypress must not be
+  able to lose work. `App.vue`'s shortcut handler bails while the prompt is
+  up so Cmd+O/Cmd+N can't bypass it.
+- `state.unsavedPrompt` holds the *action* (`null | 'new' | 'open'`) rather
+  than a boolean, so the dialog wording ("starting a new document" vs
+  "opening another document") can't desync from what's about to happen.
+
+Two things that fell out of the change: `newFile()` became genuinely async
+(it always awaits the gate), so it no longer takes effect synchronously —
+several tests relied on that and now await it. And the toolbar `<select>`
+showed the wrong file after a cancelled switch, since `currentFile` never
+changes and Vue had no reason to re-render it; `Toolbar.vue` now resyncs the
+element by hand.
+
+Investigated and explicitly **not** fixed: the uncancelled `autosaveTimer`
+in `newFile()` looks like a leak but is harmless — `resetDocument` sets
+`content` and `lastSavedContent` both to `''`, so a late timer hits
+`writeCurrent()`'s early return and writes nothing. No code was added for it.
+
+Test count went 35 → 56, all written failing-first.
+
+## Release (v1.2.0)
+
+Version bumped to `1.2.0` in `package.json`, `src-tauri/Cargo.toml`, and
+`src-tauri/tauri.conf.json`; signed + notarized build via
+`pnpm exec tauri build`; released on GitHub as draft `v1.2.0` with
+`ESCribir_1.2.0_aarch64.dmg` attached, matching the v1.1.0 pattern.
+
 ## Deliberate non-goals
 
 Called out explicitly during brainstorming so they don't get "fixed" later

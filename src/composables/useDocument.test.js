@@ -67,7 +67,7 @@ describe('autosave', () => {
   });
 
   it('autosaves untitled documents to the draft, never a dialog', async () => {
-    useDocument().newFile();
+    await useDocument().newFile();
     await type('draft words');
     await vi.advanceTimersByTimeAsync(1000);
 
@@ -93,7 +93,7 @@ describe('autosave', () => {
 
 describe('saveNow (Cmd+S)', () => {
   it('prompts for a path on untitled docs, writes the file, then deletes the draft', async () => {
-    useDocument().newFile();
+    await useDocument().newFile();
     await type('my essay');
     save.mockResolvedValue(FILE);
     invoke.mockClear();
@@ -109,7 +109,7 @@ describe('saveNow (Cmd+S)', () => {
   });
 
   it('does nothing when the save dialog is cancelled', async () => {
-    useDocument().newFile();
+    await useDocument().newFile();
     await type('my essay');
     save.mockResolvedValue(null);
     invoke.mockClear();
@@ -156,7 +156,7 @@ describe('flushSave (close/quit)', () => {
   });
 
   it('flushes untitled content to the draft without prompting', async () => {
-    useDocument().newFile();
+    await useDocument().newFile();
     await type('untitled thoughts');
 
     const ok = await useDocument().flushSave();
@@ -231,13 +231,18 @@ describe('startup restore', () => {
 
 describe('document switching', () => {
   it('deletes the draft when a real file replaces the untitled buffer', async () => {
-    useDocument().newFile();
+    await useDocument().newFile();
     await type('abandoned');
     await vi.advanceTimersByTimeAsync(1000);
     expect(invoked('write_draft')).toHaveLength(1);
     invoke.mockClear();
 
-    await loadFile();
+    // The draft only goes away once the user agrees to abandon it.
+    invoke.mockImplementation((cmd) => Promise.resolve(cmd === 'read_file' ? '# hi' : ''));
+    const done = useDocument().selectSibling(FILE);
+    await nextTick();
+    useDocument().resolveUnsavedPrompt('discard');
+    await done;
 
     expect(invoked('delete_draft')).toHaveLength(1);
     expect(state.currentFile).toBe(FILE);
@@ -246,7 +251,7 @@ describe('document switching', () => {
   it('deletes the draft on newFile so an empty buffer stays empty', async () => {
     await loadFile();
     invoke.mockClear();
-    useDocument().newFile();
+    await useDocument().newFile();
     await nextTick();
 
     expect(invoked('delete_draft')).toHaveLength(1);
@@ -270,5 +275,205 @@ describe('document switching', () => {
 
     expect(state.saveStatus).toBe('error');
     expect(state.documentOpen).toBe(false);
+  });
+});
+
+describe('newFile guards unsaved work', () => {
+  // Types into a fresh untitled buffer and lets the autosave land in the draft.
+  // isDirty is false afterwards, yet the only copy of the work is the draft file
+  // that newFile is about to delete.
+  async function untitledWithWork(text = 'my essay') {
+    await useDocument().newFile();
+    await type(text);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(invoked('write_draft')).toHaveLength(1);
+    expect(state.isDirty).toBe(false);
+    invoke.mockClear();
+  }
+
+  it('asks before replacing an autosaved untitled draft instead of destroying it', async () => {
+    await untitledWithWork();
+
+    const done = useDocument().newFile();
+    await nextTick();
+
+    expect(state.unsavedPrompt).toBe('new');
+    expect(invoked('delete_draft')).toHaveLength(0);
+    expect(state.content).toBe('my essay');
+
+    useDocument().resolveUnsavedPrompt('cancel');
+    await done;
+  });
+
+  it('leaves the buffer and the draft untouched when the prompt is cancelled', async () => {
+    await untitledWithWork();
+
+    const done = useDocument().newFile();
+    await nextTick();
+    useDocument().resolveUnsavedPrompt('cancel');
+    await done;
+
+    expect(state.unsavedPrompt).toBeNull();
+    expect(state.content).toBe('my essay');
+    expect(state.currentFile).toBeNull();
+    expect(invoked('delete_draft')).toHaveLength(0);
+  });
+
+  it('saves the untitled buffer to a real file before starting fresh', async () => {
+    await untitledWithWork();
+    save.mockResolvedValue(FILE);
+
+    const done = useDocument().newFile();
+    await nextTick();
+    useDocument().resolveUnsavedPrompt('save');
+    await done;
+
+    expect(invoked('write_file')).toEqual([['write_file', { path: FILE, contents: 'my essay' }]]);
+    expect(state.currentFile).toBeNull();
+    expect(state.content).toBe('');
+    expect(state.documentOpen).toBe(true);
+  });
+
+  it('aborts the new document when the save-as dialog is cancelled', async () => {
+    await untitledWithWork();
+    save.mockResolvedValue(null);
+
+    const done = useDocument().newFile();
+    await nextTick();
+    useDocument().resolveUnsavedPrompt('save');
+    await done;
+
+    expect(invoked('write_file')).toHaveLength(0);
+    expect(invoked('delete_draft')).toHaveLength(0);
+    expect(state.content).toBe('my essay');
+    expect(state.currentFile).toBeNull();
+  });
+
+  it('discards the work only when the user explicitly says so', async () => {
+    await untitledWithWork();
+
+    const done = useDocument().newFile();
+    await nextTick();
+    useDocument().resolveUnsavedPrompt('discard');
+    await done;
+
+    expect(invoked('delete_draft')).toHaveLength(1);
+    expect(state.content).toBe('');
+    expect(state.currentFile).toBeNull();
+  });
+
+  it('asks before dropping unsaved edits to a titled file', async () => {
+    await loadFile();
+    await type('# hi\n\nedits not yet autosaved');
+    invoke.mockClear();
+
+    const done = useDocument().newFile();
+    await nextTick();
+
+    expect(state.unsavedPrompt).toBe('new');
+
+    useDocument().resolveUnsavedPrompt('save');
+    await done;
+
+    expect(save).not.toHaveBeenCalled();
+    expect(invoked('write_file')).toEqual([
+      ['write_file', { path: FILE, contents: '# hi\n\nedits not yet autosaved' }],
+    ]);
+    expect(state.currentFile).toBeNull();
+    expect(state.content).toBe('');
+  });
+
+  it('ignores a second New while the prompt is already up', async () => {
+    await untitledWithWork();
+
+    const first = useDocument().newFile();
+    await nextTick();
+
+    let secondSettled = false;
+    useDocument()
+      .newFile()
+      .then(() => {
+        secondSettled = true;
+      });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(secondSettled).toBe(true);
+
+    useDocument().resolveUnsavedPrompt('cancel');
+    await first;
+    expect(state.content).toBe('my essay');
+  });
+
+  it('asks before another file replaces an untitled draft', async () => {
+    await untitledWithWork();
+    invoke.mockImplementation((cmd) => Promise.resolve(cmd === 'read_file' ? '# other' : ''));
+
+    const done = useDocument().selectSibling(FILE);
+    await nextTick();
+
+    expect(state.unsavedPrompt).toBe('open');
+    expect(invoked('read_file')).toHaveLength(0);
+
+    useDocument().resolveUnsavedPrompt('cancel');
+    await done;
+
+    expect(state.currentFile).toBeNull();
+    expect(state.content).toBe('my essay');
+    expect(invoked('delete_draft')).toHaveLength(0);
+  });
+
+  it('asks before Open replaces an untitled draft', async () => {
+    await untitledWithWork();
+    open.mockResolvedValue('/notes/other.md');
+    invoke.mockImplementation((cmd) => Promise.resolve(cmd === 'read_file' ? '# other' : ''));
+
+    const done = useDocument().openFile();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(state.unsavedPrompt).toBe('open');
+    expect(invoked('read_file')).toHaveLength(0);
+
+    useDocument().resolveUnsavedPrompt('cancel');
+    await done;
+
+    expect(state.currentFile).toBeNull();
+    expect(state.content).toBe('my essay');
+  });
+
+  it('saves the draft to a real file before opening a different one', async () => {
+    await untitledWithWork();
+    save.mockResolvedValue('/notes/essay.md');
+    invoke.mockImplementation((cmd) => Promise.resolve(cmd === 'read_file' ? '# other' : ''));
+
+    const done = useDocument().selectSibling(FILE);
+    await nextTick();
+    useDocument().resolveUnsavedPrompt('save');
+    await done;
+
+    expect(invoked('write_file')).toEqual([
+      ['write_file', { path: '/notes/essay.md', contents: 'my essay' }],
+    ]);
+    expect(state.currentFile).toBe(FILE);
+    expect(state.content).toBe('# other');
+  });
+
+  it('does not ask when switching away from a file with no pending edits', async () => {
+    await loadFile();
+    invoke.mockClear();
+
+    await useDocument().selectSibling('/notes/other.md');
+
+    expect(state.unsavedPrompt).toBeNull();
+    expect(state.currentFile).toBe('/notes/other.md');
+  });
+
+  it('does not ask when there is nothing to lose', async () => {
+    await loadFile();
+    invoke.mockClear();
+
+    await useDocument().newFile();
+
+    expect(state.unsavedPrompt).toBeNull();
+    expect(invoked('delete_draft')).toHaveLength(1);
+    expect(state.content).toBe('');
   });
 });
