@@ -3,11 +3,11 @@
 # ESCribir
 
 <br>
-<img width="500"  alt="SCR-20260731-hhoh" src="https://github.com/user-attachments/assets/a3cae494-8652-4605-9787-8faaf7d6c1d9"/>
+<img width="800"  alt="SCR-20260731-hhoh" src="https://github.com/user-attachments/assets/a3cae494-8652-4605-9787-8faaf7d6c1d9"/>
 <br>
 <br>
-<img width="250"  alt="SCR-20260731-hglh" src="https://github.com/user-attachments/assets/c3f85131-c74f-4410-b7a2-4fa2bcb6d4d2" />
-<img width="250"  alt="SCR-20260731-hgjr" src="https://github.com/user-attachments/assets/16d6946d-5b9a-4eac-b241-b032e9bd1834" />
+<img width="400"  alt="SCR-20260731-hglh" src="https://github.com/user-attachments/assets/c3f85131-c74f-4410-b7a2-4fa2bcb6d4d2" />
+<img width="400"  alt="SCR-20260731-hgjr" src="https://github.com/user-attachments/assets/16d6946d-5b9a-4eac-b241-b032e9bd1834" />
 <br>
 <br>
 
