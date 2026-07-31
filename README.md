@@ -31,7 +31,7 @@ files under `src-tauri/icons/` are generated from it via `tauri icon`.
 - **Tab** / **Shift-Tab** indent and outdenting works.
 - **Cmd+O** opens a different markdown file; **Cmd+N** starts a new one.
 - It's easy to just have one big notes/docs folder. The filename dropdown
-- in the toolbar lists every other `.md` file in the current file's
+- The toolbar lists every other `.md` file in the current file's
   directory, for quick switching. Or **⌘O** to open a file from anywhere.
 - No sidebar, no file browser, no project/vault concept — just the one
   document you have open.
