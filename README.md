@@ -21,29 +21,28 @@ files under `src-tauri/icons/` are generated from it via `tauri icon`.
 
 ## Features
 
-- Toggle between source (CodeMirror) and WYSIWYG (ProseMirror) editing of the
-  same markdown, with no loss of content between modes.
-- Chrome (toolbar) automatically hides as soon as you start typing, so
-  nothing but your text is on screen. Press **Esc** to bring it back.
-- Autosave, with a manual **Cmd+S** flashing a "(saved)" confirmation —
-  shown even when the chrome is hidden, because writers are paranoid about
-  saving their work.
-- An untitled document autosaves to an app-managed draft file, so it
-  survives closing and quitting with no save dialog ever. **Cmd+S** or
-  clicking the "Untitled" name in the toolbar opens the save dialog to give
-  it a real name.
-- Reopens the last document you had open on launch (or your untitled
-  draft), and remembers the window's size and position between sessions.
-- Pending changes are flushed to disk when the window is closed or the app
-  quits.
-- **Tab** / **Shift-Tab** indent and outdent in both editors (list items in
-  WYSIWYG mode) instead of moving keyboard focus.
+- Distraction free: automatically hides toolbar as soon as you start typing,
+  Press **ESC** to bring it back.
+- Toggle between plaintext and WYSIWYG editing of Markdown, or don't use
+  Markdown at all!
+- Autosave and manual save.
+- ESCribir opens to your last document automatically, even if it wasn't
+  explicitly saved. **⌘S** on an unsaved document prompts you to save it.
+- **Tab** / **Shift-Tab** indent and outdenting works.
 - **Cmd+O** opens a different markdown file; **Cmd+N** starts a new one.
-- The filename dropdown in the toolbar lists every other `.md` file in the
-  current file's directory, for quick switching between files in the same
-  folder.
+- It's easy to just have one big notes/docs folder. The filename dropdown
+- in the toolbar lists every other `.md` file in the current file's
+  directory, for quick switching. Or **⌘O** to open a file from anywhere.
 - No sidebar, no file browser, no project/vault concept — just the one
   document you have open.
+
+## License
+
+This is free (as in pizza and as in freedom) software under the MIT license. Enjoy!
+
+---
+
+## Nerdy coding details follow
 
 ## Development
 
